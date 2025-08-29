@@ -4,6 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NBクリニック - 専門コンサルテーション</title>
+    
+    <!-- Facebook Pixel Code -->
+    <script>
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+    (window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
+
+    fbq('init','748503224834736');
+    fbq('track','PageView');
+    </script>
+    <noscript>
+      <img height="1" width="1" style="display:none"
+           src="https://www.facebook.com/tr?id=748503224834736&ev=PageView&noscript=1" />
+    </noscript>
+    <!-- End Facebook Pixel Code -->
+    
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -82,6 +100,11 @@
 
     <script>
         document.querySelector('.line-button').addEventListener('click', function(e) {
+            // Facebook Pixel Contact 이벤트 추적
+            if (typeof fbq === 'function') {
+                fbq('track', 'Contact');
+            }
+            
             const loading = document.getElementById('loading');
             loading.style.display = 'flex';
             
@@ -90,5 +113,99 @@
             }, 2000);
         });
     </script>
+    
+<script>
+  // ====== 유틸 ======
+  function genEventId() {
+    return 'cid-' + Date.now() + '-' + Math.random().toString(36).slice(2,10);
+  }
+  function getCookie(name) {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function getFbc() {
+    // URL에 fbclid가 있으면 _fbc 형식으로 생성
+    const params = new URLSearchParams(location.search);
+    const fbclid = params.get('fbclid');
+    if (fbclid) return `fb.1.${Date.now()}.${fbclid}`;
+    // 없으면 쿠키에서
+    return getCookie('_fbc') || '';
+  }
+
+  async function sendLeadToServer(eventId) {
+    try {
+      console.log('📨 sendLeadToServer() 시작, eventId:', eventId);
+      
+      const email = (document.querySelector('input[name="email"]') || {}).value || '';
+      const phone = (document.querySelector('input[name="phone"]') || {}).value || '';
+
+      const payload = {
+        eventId,
+        eventSourceUrl: location.href,
+        email,
+        phone,
+        fbp: getCookie('_fbp') || '',
+        fbc: getFbc(),
+        userAgent: navigator.userAgent
+      };
+
+      console.log('📋 전송할 payload:', payload);
+      console.log('🌐 /api/lead 요청 시작...');
+
+      const response = await fetch('/api/lead', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload),
+        keepalive: true // 탭 닫혀도 전송 시도
+      });
+
+      console.log('📡 서버 응답 상태:', response.status);
+      const result = await response.json();
+      console.log('📄 서버 응답 내용:', result);
+      console.log('🔍 상세 Meta 응답:', result.meta);
+      
+      if (response.ok) {
+        console.log('✅ CAPI 전송 성공!');
+      } else {
+        console.log('❌ CAPI 전송 실패:', result);
+      }
+    } catch(e) {
+      console.error('🚨 CAPI 전송 에러:', e);
+    }
+  }
+
+  // ====== 리드 전송 훅(버튼/폼에 연결) ======
+  function trackLeadWithDedup() {
+    console.log('🚀 trackLeadWithDedup() 호출됨');
+    const eventId = genEventId();
+    console.log('📋 생성된 eventId:', eventId);
+    
+    // 브라우저 픽셀(Lead)
+    if (typeof window.fbq === 'function') {
+      console.log('✅ fbq 함수 존재 - 브라우저 픽셀 전송');
+      fbq('track', 'Lead', {}, { eventID: eventId });
+    } else {
+      console.log('❌ fbq 함수 없음');
+    }
+    
+    // 서버(CAPI) 동시 전송
+    console.log('🌐 서버 CAPI 전송 시작');
+    sendLeadToServer(eventId);
+  }
+
+  // LINE 버튼 클릭 시 Lead 추적
+  const lineBtn = document.querySelector('.line-button');
+  if (lineBtn) {
+    lineBtn.addEventListener('click', trackLeadWithDedup);
+  }
+
+  // 폼 제출 시 Lead 추적 (폼이 있을 경우)
+  const leadForm = document.getElementById('leadForm');
+  if (leadForm) {
+    leadForm.addEventListener('submit', function () {
+      trackLeadWithDedup();
+    });
+  }
+</script>
 </body>
 </html>
